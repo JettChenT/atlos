@@ -284,13 +284,15 @@ defmodule Platform.Material do
 
           # Upload media, if provided
           for url <- Ecto.Changeset.get_field(changeset, :urls_parsed) do
-            {:ok, _} =
+            {:ok, version} =
               create_media_version_audited(media, user, %{
                 upload_type: :direct,
                 status: :pending,
                 source_url: url,
                 media_id: media.id
               })
+
+            archive_media_version(version)
           end
 
           # Schedule metadata generation
@@ -574,6 +576,14 @@ defmodule Platform.Material do
     |> Enum.map(& &1.media)
     |> Enum.sort()
     |> Enum.dedup()
+  end
+
+  def get_pending_media_versions() do
+    Repo.all(
+      from(v in MediaVersion,
+        where: v.status == :pending
+      )
+    )
   end
 
   @doc """
