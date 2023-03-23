@@ -1,6 +1,7 @@
 defmodule PlatformWeb.UpdatesLive.PaginatedMediaUpdateFeed do
   use PlatformWeb, :live_component
   alias Platform.Material
+  alias Platform.Permissions
 
   def update(assigns, socket) do
     socket =
@@ -24,7 +25,7 @@ defmodule PlatformWeb.UpdatesLive.PaginatedMediaUpdateFeed do
         restrict_to_project_id: socket.assigns.restrict_to_project_id
       )
     )
-    |> Enum.filter(&Material.Media.can_user_view(&1, socket.assigns.current_user))
+    |> Enum.filter(&Permissions.can_view_media?(socket.assigns.current_user, &1))
   end
 
   def handle_event("load_more", _params, socket, depth \\ 10) do
@@ -104,15 +105,15 @@ defmodule PlatformWeb.UpdatesLive.PaginatedMediaUpdateFeed do
       <% end %>
       <div class="mx-auto mt-4 mb-8 text-center text-xs">
         <%= if @additional_results_available do %>
-          <div
-            phx-hook="InfiniteScroll"
+          <button
             id="feed-load-more"
-            data-page={@pagination_index}
+            phx-click="load_more"
             phx-target={@myself}
-            class="flex items-center justify-around"
+            class="text-button"
+            phx-disable-with="Loading..."
           >
-            <.loading_spinner />
-          </div>
+            Load More
+          </button>
         <% end %>
       </div>
     </div>
