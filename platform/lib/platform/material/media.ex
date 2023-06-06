@@ -91,7 +91,7 @@ defmodule Platform.Material.Media do
       :project_id,
       :urls
     ])
-
+    |> validate_required([:project_id], message: "Please select a project")
     # These are special attributes, since we define it at creation time. Eventually, it'd be nice to unify this logic with the attribute-specific editing logic.
     |> Attribute.validate_attribute(Attribute.get_attribute(:description), media,
       user: user,
@@ -105,7 +105,6 @@ defmodule Platform.Material.Media do
       user: user,
       required: false
     )
-    |> validate_required([:project_id], message: "Please select a project")
     |> validate_project(user, media)
     |> parse_and_validate_validate_json_array(:urls, :urls_parsed)
     |> validate_url_list(:urls_parsed)
@@ -259,17 +258,20 @@ defmodule Platform.Material.Media do
   The import changeset simply runs the media through *every* attribute's changeset.
   In this way, it's possible to import any attribute.
   """
-  def import_changeset(media, attrs) do
+  def import_changeset(media, attrs, %Projects.Project{} = project) do
+    possible_attrs = Attribute.active_attributes(project: project)
+
     # First, we rename and parse fields to match their internal representation.
-    attr_names = Attribute.attribute_names() |> Enum.map(&(&1 |> to_string()))
-
     attrs =
-      attrs
-      |> Map.to_list()
-      |> Enum.map(fn {k, v} ->
-        if Enum.member?(attr_names, k) do
-          attr = Attribute.get_attribute(k)
+      Enum.map(attrs, fn {k, v} ->
+        attr =
+          Enum.find(possible_attrs, fn a ->
+            # We allow the user to use the schema field, the attribute name, or the label
+            to_string(a.schema_field) == k or to_string(a.schema_field) == "attr_" <> k or
+              String.downcase(a.label) == String.downcase(k)
+          end)
 
+        if not is_nil(attr) do
           # Split lists (comma separated)
           v =
             case attr.type do
@@ -278,23 +280,51 @@ defmodule Platform.Material.Media do
                   # Already split, or the uploader did something wrong (e.g., two columns of the same field)
                   v
                 else
-                  v |> String.split(",") |> Enum.map(&String.trim(&1))
+                  v |> String.split(",") |> Enum.map(&String.trim(&1)) |> Enum.reject(&(&1 == ""))
                 end
 
               _ ->
                 v
             end
 
-          {attr.schema_field |> to_string(), v}
+          name =
+            if attr.schema_field == :project_attributes,
+              do: {:project_attribute, attr.name},
+              else: attr.schema_field
+
+          {name, v}
         else
-          {k, v}
+          {to_string(k), v}
         end
       end)
       |> Enum.reduce(%{}, fn {k, v}, acc ->
-        Map.put(acc, k, v)
+        case k do
+          {:project_attribute, name} ->
+            # Project attributes are stored in a special map
+            existing = Map.get(acc, "project_attributes", %{})
+
+            Map.put(
+              acc,
+              "project_attributes",
+              existing
+              |> Map.put(to_string(map_size(existing)), %{
+                "id" => name,
+                "value" => v,
+                "project_id" => project.id
+              })
+            )
+
+          _ ->
+            # Everything else is stored in a normal base map
+            Map.put(acc, to_string(k), v)
+        end
       end)
 
-    Attribute.combined_changeset(media, Attribute.active_attributes(), attrs)
+    # Move attributes
+    Attribute.combined_changeset(media, Attribute.active_attributes(project: project), attrs,
+      verify_change_exists: false
+    )
+    |> Ecto.Changeset.put_change(:project_id, project.id)
   end
 
   def attribute_ratio(%Media{} = media) do
