@@ -1879,9 +1879,15 @@ defmodule PlatformWeb.Components do
     <% has_unread_notification = @media.has_unread_notification %>
     <% is_sensitive = Material.Media.is_sensitive(@media) %>
     <% background_color =
-      cond do
-        is_sensitive -> "bg-red-50"
-        true -> "bg-white group-hover:bg-neutral-50 hover:bg-neutral-50"
+      case @media.attr_sensitive do
+        x when x == ["Not Sensitive"] or x == [] ->
+          "bg-white group-hover:bg-neutral-50 hover:bg-neutral-50"
+
+        ["Personal Information Visible"] ->
+          "bg-orange-50"
+
+        _ ->
+          "bg-red-50"
       end %>
     <tr
       class={"search-highlighting group transition-all " <> background_color}
@@ -1929,7 +1935,7 @@ defmodule PlatformWeb.Components do
               <%= Media.slug_to_display(@media) %>
             </span>
             <%= if is_sensitive do %>
-              <span data-tooltip="Incident is sensitive" class="text-critical-400">
+              <span data-tooltip={Enum.join(@media.attr_sensitive, ", ")} class="text-critical-400">
                 <Heroicons.shield_exclamation mini class="h-4 w-4" />
               </span>
             <% end %>
@@ -2857,7 +2863,8 @@ defmodule PlatformWeb.Components do
                     role="menuitem"
                     title="Copy Hash Information"
                     class="text-gray-700 px-2 py-2 text-sm flex items-center gap-2 hover:bg-gray-100 w-full"
-                    onclick={
+                    x-data
+                    x-on:click={
                       "window.setClipboard(" <>
                         Jason.encode!(@version.source_url) <>
                         ")"
@@ -2873,7 +2880,8 @@ defmodule PlatformWeb.Components do
                       phx-value-version={@version.id}
                       phx-value-state="hidden"
                       class="text-gray-700 px-2 py-2 text-sm flex items-center gap-2 hover:bg-gray-100 w-full"
-                      title="Hide"
+                      title="Minimize"
+                      data-tooltip="Minimized source material can be viewed by all project members."
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -2898,7 +2906,8 @@ defmodule PlatformWeb.Components do
                       phx-value-version={@version.id}
                       phx-value-state="visible"
                       class="text-gray-700 px-2 py-2 text-sm flex items-center gap-2 hover:bg-gray-100 w-full"
-                      title="Unhide"
+                      title="Unminimize"
+                      data-tooltip="Minimized source material can be viewed by all project members."
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -2937,6 +2946,7 @@ defmodule PlatformWeb.Components do
                       phx-value-state={
                         if @version.visibility == :removed, do: "visible", else: "removed"
                       }
+                      data-tooltip="Removed source material can only be viewed by project owners and managers."
                       title={if @version.visibility == :removed, do: "Undo Removal", else: "Remove"}
                       class="text-gray-700 px-2 py-2 text-sm flex items-center gap-2 hover:bg-gray-100 w-full"
                     >

@@ -145,6 +145,9 @@ defmodule Platform.Utils do
   def render_markdown(markdown) do
     # Safe markdown rendering. No images or headers.
 
+    # Preprocessing: replace single linebreaks with double linebreaks _except_ when the newline is followed by a list item or a digit (i.e. a numbered list)
+    markdown = Regex.replace(~r/([^\n])(\n)(?![0-9]|\*)/, markdown, "\\1\\2\\2")
+
     # First, strip images and turn them into links. Primitive.
     markdown = Regex.replace(~r"!*\[", markdown, "[")
 
@@ -220,10 +223,7 @@ defmodule Platform.Utils do
   end
 
   def get_runtime_information() do
-    region = System.get_env("FLY_REGION", "unknown")
-    alloc_id = System.get_env("FLY_ALLOC_ID", "unknown")
-
-    "allocation #{alloc_id} in region #{region}"
+    System.get_env("CONTAINER_APP_REPLICA_NAME", "replica info unknown")
   end
 
   def text_search(search_terms, queryable) do
